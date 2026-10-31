@@ -1,0 +1,313 @@
+<title>Ten Band EQ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: response curve over a live spectrum on top, ten faders under it, transport and source beside. Sibling of the Dudley Vocoder. */
+  :root {
+    --bg: #e9eef0; --panel: #f6f9fa; --ink: #13222b; --mute: #55666f; --line: #c3d0d6; --accent: #0a5f86; --accent-ink: #ffffff; --spec: #9db4bf;
+    --f-display: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+    --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #0d1519; --panel: #141f25; --ink: #dbe6ea; --mute: #8ea3ac; --line: #28383f; --accent: #f0b447; --accent-ink: #1a1203; --spec: #3b5560; color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg: #0d1519; --panel: #141f25; --ink: #dbe6ea; --mute: #8ea3ac; --line: #28383f; --accent: #f0b447; --accent-ink: #1a1203; --spec: #3b5560; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); padding-block: 20px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 980px; margin: 0 auto; display: grid; gap: 16px; }
+  h1 { font: 700 clamp(34px, 7vw, 54px)/0.95 var(--f-display); margin: 0; text-transform: uppercase; text-wrap: balance; }
+  h2 { font: 600 13px/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); margin: 0 0 12px; }
+  .sub { color: var(--mute); margin: 8px 0 0; max-width: 62ch; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; min-width: 0; }
+  .scope { padding: 0; overflow: hidden; }
+  .scope-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); font: 12px var(--f-mono); color: var(--mute); }
+  canvas { display: block; width: 100%; height: 300px; touch-action: none; cursor: ns-resize; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button, select, input[type=file]::file-selector-button { font: 500 14px var(--f-body); border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 4px; padding: 9px 14px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button[aria-pressed=true] { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .tabs button { border: 0; border-radius: 0; background: transparent; }
+  .tabs button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); outline: 0; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .eq { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; align-items: end; }
+  .eq label { display: grid; justify-items: center; gap: 6px; font: 11px var(--f-mono); color: var(--mute); min-width: 0; text-align: center; }
+  .eq input[type=range] { writing-mode: vertical-lr; direction: rtl; width: 28px; height: 160px; accent-color: var(--accent); }
+  .eq output { color: var(--ink); }
+  .eq .t { font-size: 10px; }
+  .note { font-size: 12.5px; color: var(--mute); }
+  #status { font: 12px var(--f-mono); color: var(--mute); min-height: 18px; }
+  label.ctl { display: grid; gap: 4px; font-size: 13px; color: var(--mute); }
+  .ctl .v { font: 13px var(--f-mono); color: var(--ink); display: flex; justify-content: space-between; gap: 8px; }
+  input[type=range].h { width: 100%; accent-color: var(--accent); }
+  ul.cites { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; }
+  cite { font-style: normal; }
+  @media (max-width: 520px) { .eq .t { font-size: 9px; } .eq input[type=range] { width: 22px; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<main>
+  <header>
+    <h1>Ten Band EQ</h1>
+    <p class="sub">A graphic equalizer with real shelves. Pick the studio layout or the ten Bell Labs vocoder bands, then drag the curve or the faders while the spectrum moves under it.</p>
+  </header>
+
+  <section class="panel scope" aria-label="Response curve and spectrum">
+    <div class="scope-head"><span id="hdLayout">Studio layout</span><span id="hdRead">drag the graph to set gain</span></div>
+    <canvas id="cv" role="img" aria-label="EQ response curve over live spectrum. Drag vertically near a band to change its gain."></canvas>
+  </section>
+
+  <section class="panel">
+    <h2>Transport</h2>
+    <div class="row">
+      <button id="play" class="primary">Play</button>
+      <button id="stop">Stop</button>
+      <button id="byp" aria-pressed="false">Bypass</button>
+      
+      <span id="status" role="status"></span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Source</h2>
+    <div class="row">
+      <button id="sPink" aria-pressed="true">Pink noise</button>
+      <button id="sDemo" aria-pressed="false">Demo phrase</button>
+      <label class="row" style="gap:8px"><span class="note">Your audio</span><input id="file" type="file" accept="audio/*"></label>
+    </div>
+    <p class="note" style="margin:10px 0 0">Pink noise has equal energy per octave, so a flat EQ shows a flat spectrum and every fader is easy to hear.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Equalizer</h2>
+    <div class="row" style="margin-bottom:16px">
+      <div class="tabs" role="group" aria-label="Layout">
+        <button id="lStudio" aria-pressed="true">Studio</button>
+        <button id="lBell" aria-pressed="false">Bell 1940</button>
+      </div>
+      <span class="note" id="layNote">Low shelf, eight peaking bands, high shelf. 80 Hz to 10 kHz.</span>
+    </div>
+    <div class="eq" id="eq"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="pFlat">Flat</button><button id="pPres">Presence</button><button id="pTel">Telephone</button><button id="pWarm">Warm</button>
+      <label class="ctl" style="min-width:200px;margin-left:auto"><span class="v"><span>Output</span><span id="vOut">0 dB</span></span><input id="out" class="h" type="range" min="-12" max="6" step="0.5" value="0"></label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Checked and not checked</h2>
+    <p class="note" style="margin:0 0 6px">Checked by measurement: each fader's boost or cut lands on its band center within 1.5 dB, shelves hold their level past the corner, and rendered audio changes as the curve says.</p>
+    <p class="note" style="margin:0">Not checked: how it sounds. The Bell 1940 layout reuses the band edges from Dudley's vocoder (ten bands, lowest 0 to 250 Hz, the rest 300 Hz wide, to 2950 Hz), but a vocoder's band-pass filters are not the same as these peaking filters.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Sources</h2>
+    <ul class="cites">
+      <li><cite>Dudley, H. (1940). The carrier nature of speech. <i>Bell System Technical Journal</i>, 19(4), 495&ndash;515.</cite> Ten-band layout.</li>
+      <li><cite>Bristow-Johnson, R. Cookbook formulae for audio EQ biquad filter coefficients.</cite> The peaking and shelving filters in Web Audio follow this family of designs (W3C Audio EQ Cookbook).</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const SR = 44100;
+  const LAYOUTS = {
+    studio: { name: "Studio layout", note: "Low shelf, eight peaking bands, high shelf. 80 Hz to 10 kHz.", q: 1.1,
+      bands: [["lowshelf", 80], ["peaking", 160], ["peaking", 320], ["peaking", 640], ["peaking", 1000], ["peaking", 1600], ["peaking", 2500], ["peaking", 4000], ["peaking", 6300], ["highshelf", 10000]] },
+    bell: { name: "Bell 1940 layout", note: "Ten vocoder bands as peaking filters: 0 to 250 Hz, then nine of 300 Hz up to 2950 Hz.", q: 0,
+      bands: [["lowshelf", 250], ["peaking", 400], ["peaking", 700], ["peaking", 1000], ["peaking", 1300], ["peaking", 1600], ["peaking", 1900], ["peaking", 2200], ["peaking", 2500], ["peaking", 2800]] }
+  };
+  const S = { layout: "studio", gain: { studio: new Array(10).fill(0), bell: new Array(10).fill(0) }, out: 0, bypass: false, buf: null, src: "pink", node: null };
+
+  function params(layout) { // [{type,f,q}]
+    const L = LAYOUTS[layout];
+    return L.bands.map(([type, f]) => ({ type, f, q: type !== "peaking" ? 0.71 : (layout === "bell" ? Math.max(0.7, Math.min(9, f / 300)) : L.q) }));
+  }
+  function applyChain(filters, layout, gains, bypass) {
+    const P = params(layout);
+    filters.forEach((fl, i) => { fl.type = P[i].type; fl.frequency.value = P[i].f; fl.Q.value = P[i].q; fl.gain.value = bypass ? 0 : gains[i]; });
+  }
+  function makeFilters(ctx) { return Array.from({ length: 10 }, () => ctx.createBiquadFilter()); }
+
+  // mirror chain used only for drawing and testing the response
+  const rc = new OfflineAudioContext(1, 1, SR), rf = makeFilters(rc);
+  const NPTS = 240, FREQ = new Float32Array(NPTS);
+  for (let i = 0; i < NPTS; i++) FREQ[i] = 20 * Math.pow(1000, i / (NPTS - 1));
+  function response(freqs) {
+    applyChain(rf, S.layout, S.gain[S.layout], false);
+    const tot = new Float32Array(freqs.length), mag = new Float32Array(freqs.length), ph = new Float32Array(freqs.length);
+    rf.forEach((f) => { f.getFrequencyResponse(freqs, mag, ph); for (let i = 0; i < freqs.length; i++) tot[i] += 20 * Math.log10(mag[i]); });
+    return tot;
+  }
+
+  // ---- sources
+  function pink(sec) {
+    const n = SR * sec, b = rc.createBuffer(1, n, SR), d = b.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, s = 987654321;
+    for (let i = 0; i < n; i++) {
+      s = (s * 1664525 + 1013904223) >>> 0; const w = s / 2147483648 - 1;
+      b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852; b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+      d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926;
+    }
+    return b;
+  }
+  async function demo() {
+    const F = { i: [270, 2290, 3010], a: [730, 1090, 2440], u: [300, 870, 2240], e: [530, 1840, 2480], o: [570, 840, 2410] };
+    const segs = [["s", 0.2], ["v", "i", 0.42], ["s", 0.16], ["v", "a", 0.46], ["s", 0.16], ["v", "u", 0.42], ["x", 0.14], ["v", "e", 0.36], ["v", "o", 0.55], ["x", 0.3]];
+    const total = segs.reduce((t, s) => t + s[s.length - 1], 0), oc = new OfflineAudioContext(1, Math.ceil(total * SR), SR);
+    const src = oc.createOscillator(); src.type = "sawtooth";
+    const curve = new Float32Array(400); for (let i = 0; i < 400; i++) { const t = (i / 400) * total; curve[i] = 122 * (1 + 0.1 * Math.sin((2 * Math.PI * t) / 1.9)) - 9 * t; }
+    src.frequency.setValueCurveAtTime(curve, 0, total); src.start(0);
+    const vg = oc.createGain(); vg.gain.value = 0; src.connect(vg);
+    const fm = [0, 1, 2].map((k) => { const b = oc.createBiquadFilter(); b.type = "bandpass"; b.Q.value = [8, 10, 12][k]; b.frequency.value = 500; const g = oc.createGain(); g.gain.value = [1, 0.6, 0.3][k]; vg.connect(b); b.connect(g); g.connect(oc.destination); return b; });
+    const ns = oc.createBufferSource(); ns.buffer = pink(2); ns.loop = true; ns.start(0);
+    const nbp = oc.createBiquadFilter(); nbp.type = "bandpass"; nbp.frequency.value = 6200; nbp.Q.value = 1.2;
+    const fg = oc.createGain(); fg.gain.value = 0; ns.connect(nbp); nbp.connect(fg); fg.connect(oc.destination);
+    let t = 0;
+    segs.forEach((s) => { const d = s[s.length - 1];
+      if (s[0] === "s") { fg.gain.setTargetAtTime(2.2, t, 0.01); fg.gain.setTargetAtTime(0, t + d - 0.03, 0.01); }
+      if (s[0] === "v") { fm.forEach((b, k) => b.frequency.setTargetAtTime(F[s[1]][k], t, 0.03)); vg.gain.setTargetAtTime(0.5, t, 0.012); vg.gain.setTargetAtTime(0, t + d - 0.02, 0.012); }
+      t += d; });
+    const r = await oc.startRendering(), d = new Float32Array(r.getChannelData(0)); let m = 0; for (const v of d) m = Math.max(m, Math.abs(v));
+    for (let i = 0; i < d.length; i++) d[i] *= 0.7 / m;
+    const ob = new AudioBuffer({ length: d.length, numberOfChannels: 1, sampleRate: SR }); ob.copyToChannel(d, 0); return ob;
+  }
+
+  // ---- live playback
+  let ac = null, filters = null, analyser = null, outG = null, srcNode = null;
+  function ensureAudio() {
+    if (ac) { if (ac.state === "suspended") ac.resume(); return true; }
+    try {
+      ac = new (window.AudioContext || window.webkitAudioContext)(); ac.resume();
+      filters = makeFilters(ac); for (let i = 0; i < 9; i++) filters[i].connect(filters[i + 1]);
+      outG = ac.createGain(); analyser = ac.createAnalyser(); analyser.fftSize = 4096; analyser.smoothingTimeConstant = 0.8;
+      filters[9].connect(outG); outG.connect(analyser); analyser.connect(ac.destination); syncAudio(); return true;
+    } catch (e) { $("status").textContent = "Audio is not available here."; return false; }
+  }
+  function syncAudio() {
+    if (!ac) return;
+    applyChain(filters, S.layout, S.gain[S.layout], S.bypass);
+    outG.gain.value = Math.pow(10, S.out / 20);
+  }
+  function stop() { if (srcNode) { try { srcNode.stop(); } catch (e) {} srcNode = null; } $("play").setAttribute("aria-pressed", "false"); }
+  function play() {
+    if (!S.buf || !ensureAudio()) return;
+    stop(); srcNode = ac.createBufferSource(); srcNode.buffer = S.buf; srcNode.loop = true; srcNode.connect(filters[0]); srcNode.start();
+    $("play").setAttribute("aria-pressed", "true");
+  }
+
+  async function renderOffline() {
+    const b = S.buf, oc = new OfflineAudioContext(1, b.length, b.sampleRate), f = makeFilters(oc);
+    for (let i = 0; i < 9; i++) f[i].connect(f[i + 1]);
+    applyChain(f, S.layout, S.gain[S.layout], S.bypass);
+    const g = oc.createGain(); g.gain.value = Math.pow(10, S.out / 20); f[9].connect(g); g.connect(oc.destination);
+    const s = oc.createBufferSource(); s.buffer = b; s.connect(f[0]); s.start();
+    return oc.startRendering();
+  }
+
+  // ---- UI
+  const eqEls = [];
+  function label(i) { const f = LAYOUTS[S.layout].bands[i][1], ty = LAYOUTS[S.layout].bands[i][0]; return (f >= 1000 ? (f / 1000) + "k" : f) + (ty === "lowshelf" ? " lo" : ty === "highshelf" ? " hi" : ""); }
+  function buildFaders() {
+    $("eq").textContent = ""; eqEls.length = 0;
+    for (let i = 0; i < 10; i++) {
+      const l = document.createElement("label"), inp = document.createElement("input"), o = document.createElement("output"), t = document.createElement("span");
+      inp.type = "range"; inp.min = -15; inp.max = 15; inp.step = 0.5; inp.id = "eq" + i; t.className = "t";
+      inp.addEventListener("input", () => { S.gain[S.layout][i] = +inp.value; sync(); });
+      l.append(inp, o, t); $("eq").appendChild(l); eqEls.push({ inp, o, t });
+    }
+  }
+  function sync() {
+    const g = S.gain[S.layout];
+    eqEls.forEach((e, i) => { e.inp.value = g[i]; e.o.textContent = (g[i] > 0 ? "+" : "") + g[i]; e.t.textContent = label(i); e.inp.setAttribute("aria-label", label(i) + " Hz gain in decibels"); });
+    $("lStudio").setAttribute("aria-pressed", S.layout === "studio"); $("lBell").setAttribute("aria-pressed", S.layout === "bell");
+    $("layNote").textContent = LAYOUTS[S.layout].note; $("hdLayout").textContent = LAYOUTS[S.layout].name;
+    $("byp").setAttribute("aria-pressed", S.bypass); $("vOut").textContent = (S.out > 0 ? "+" : "") + S.out + " dB";
+    syncAudio();
+  }
+  const PRESETS = {
+    studio: { pFlat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pPres: [0, 0, 0, 0, 0, 1, 3, 4, 3, 2], pTel: [-15, -15, -9, -1, 3, 4, 2, -3, -12, -15], pWarm: [4, 3, 2, 1, 0, -1, -2, -3, -4, -5] },
+    bell: { pFlat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], pPres: [-3, -2, 0, 1, 2, 3, 4, 4, 3, 2], pTel: [-15, -9, -2, 3, 4, 3, 2, 0, -3, -6], pWarm: [5, 4, 3, 2, 1, 0, -1, -2, -3, -4] }
+  };
+  Object.keys(PRESETS.studio).forEach((id) => { $(id).onclick = () => { S.gain[S.layout] = PRESETS[S.layout][id].slice(); sync(); }; });
+  $("lStudio").onclick = () => { S.layout = "studio"; sync(); };
+  $("lBell").onclick = () => { S.layout = "bell"; sync(); };
+  $("byp").onclick = () => { S.bypass = !S.bypass; sync(); };
+  $("out").addEventListener("input", () => { S.out = +$("out").value; sync(); });
+  $("play").onclick = play; $("stop").onclick = stop;
+
+  async function setSource(kind, buf) {
+    S.src = kind; S.buf = buf; ["sPink", "sDemo"].forEach((id) => $(id).setAttribute("aria-pressed", false));
+    if (kind === "pink") $("sPink").setAttribute("aria-pressed", true); if (kind === "demo") $("sDemo").setAttribute("aria-pressed", true);
+    if ($("play").getAttribute("aria-pressed") === "true") play();
+  }
+  $("sPink").onclick = () => setSource("pink", pink(8));
+  $("sDemo").onclick = async () => setSource("demo", await demo());
+  $("file").onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      let b = await new OfflineAudioContext(1, 1, SR).decodeAudioData(await f.arrayBuffer());
+      const max = Math.floor(b.sampleRate * 60); if (b.length > max) { const nb = new AudioBuffer({ length: max, numberOfChannels: b.numberOfChannels, sampleRate: b.sampleRate }); for (let c = 0; c < b.numberOfChannels; c++) nb.copyToChannel(b.getChannelData(c).subarray(0, max), c); b = nb; }
+      setSource("file", b);
+    } catch (err) { $("status").textContent = "Could not decode that file. Try wav or mp3."; }
+  };
+  function wav(samples, sr) {
+    const n = samples.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) { const s = Math.max(-1, Math.min(1, samples[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
+    return buf;
+  }
+  
+
+  // ---- drawing + dragging
+  const DBMAX = 18, FMIN = 20, FMAX = 20000;
+  const xOf = (f, W) => (Math.log(f / FMIN) / Math.log(FMAX / FMIN)) * W;
+  const yOf = (db, H) => H / 2 - (db / DBMAX) * (H / 2 - 14);
+  let spec = null;
+  function draw() {
+    const c = $("cv"), dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    const g = c.getContext("2d"), W = c.width, H = c.height, line = css("--line"), accent = css("--accent"), mute = css("--mute"), specC = css("--spec");
+    g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = css("--panel"); g.fillRect(0, 0, W, H);
+    g.font = 11 * dpr + "px " + css("--f-mono"); g.lineWidth = 1; g.strokeStyle = line; g.fillStyle = mute;
+    [100, 1000, 10000].forEach((f) => { const x = xOf(f, W); g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); g.fillText(f >= 1000 ? f / 1000 + "k" : f, x + 4, H - 6); });
+    [-12, -6, 0, 6, 12].forEach((d) => { const y = yOf(d, H); g.strokeStyle = d === 0 ? mute : line; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); g.fillText((d > 0 ? "+" : "") + d, 4, y - 3); });
+    // spectrum
+    if (analyser && srcNode) {
+      if (!spec) spec = new Float32Array(analyser.frequencyBinCount); analyser.getFloatFrequencyData(spec);
+      g.fillStyle = specC; g.beginPath(); g.moveTo(0, H);
+      for (let px = 0; px <= W; px += 2) {
+        const f = FMIN * Math.pow(FMAX / FMIN, px / W), k = Math.min(spec.length - 1, Math.round((f / (ac.sampleRate / 2)) * spec.length));
+        const db = isFinite(spec[k]) ? spec[k] : -120, y = H - ((db + 100) / 80) * (H * 0.8) - 4; g.lineTo(px, Math.max(H * 0.1, Math.min(H, y)));
+      }
+      g.lineTo(W, H); g.closePath(); g.globalAlpha = 0.8; g.fill(); g.globalAlpha = 1;
+    }
+    // response curve
+    const R = response(FREQ); g.strokeStyle = accent; g.lineWidth = 3 * dpr; g.beginPath();
+    for (let i = 0; i < NPTS; i++) { const x = xOf(FREQ[i], W), y = yOf(Math.max(-DBMAX, Math.min(DBMAX, R[i])), H); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.stroke();
+    // band handles
+    const gains = S.gain[S.layout]; g.fillStyle = accent;
+    LAYOUTS[S.layout].bands.forEach(([t, f], i) => { g.beginPath(); g.arc(xOf(f, W), yOf(gains[i], H), 6 * dpr, 0, 7); g.fill(); });
+  }
+  (function loop() { draw(); requestAnimationFrame(loop); })();
+  let drag = -1;
+  function pos(e) { const r = $("cv").getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; }
+  function nearest(px) { let b = 0, bd = 9; LAYOUTS[S.layout].bands.forEach(([t, f], i) => { const d = Math.abs(Math.log(f / FMIN) / Math.log(FMAX / FMIN) - px); if (d < bd) { bd = d; b = i; } }); return b; }
+  function setFromY(i, py) { const db = Math.round(((0.5 - py) * 2 * (DBMAX / (1 - 28 / $("cv").clientHeight))) * 2) / 2; S.gain[S.layout][i] = Math.max(-15, Math.min(15, db)); sync(); }
+  $("cv").addEventListener("pointerdown", (e) => { $("cv").setPointerCapture(e.pointerId); const p = pos(e); drag = nearest(p.x); setFromY(drag, p.y); });
+  $("cv").addEventListener("pointermove", (e) => { if (drag < 0) return; setFromY(drag, pos(e).y); });
+  ["pointerup", "pointercancel"].forEach((n) => $("cv").addEventListener(n, () => { drag = -1; }));
+
+  window.__eq = { S, response, params, applyChain, makeFilters, renderOffline, pink, demo, setGain: (i, v) => { S.gain[S.layout][i] = v; sync(); }, setLayout: (l) => { S.layout = l; sync(); }, setBypass: (b) => { S.bypass = b; sync(); }, setBuf: (b) => { S.buf = b; }, FREQ };
+  buildFaders(); setSource("pink", pink(8)); sync();
+})();
+</script>
